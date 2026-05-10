@@ -1,0 +1,985 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>人格切替プロンプト生成ツール</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+
+    :root {
+      --purple: #7c3aed;
+      --purple-light: #9333ea;
+      --purple-pale: #ede9fe;
+      --purple-mid: #c4b5fd;
+      --purple-text: #6d28d9;
+      --bg: #f8f5ff;
+      --sidebar-bg: #5b21b6;
+      --card-bg: #ffffff;
+      --border: #e9d5ff;
+      --border-strong: #d8b4fe;
+      --txt: #0f172a;
+      --muted: #64748b;
+      --muted-light: #cbd5e1;
+      --good: #22c55e;
+      --good-light: #d1fae5;
+      --accent-blue: #a855f7;
+      --radius: 12px;
+      --sidebar-w: 240px;
+      --topbar-h: 56px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Noto Sans JP', ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--txt);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      font-size: 14px;
+    }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      height: var(--topbar-h);
+      background: #ffffff;
+      border-bottom: 1px solid rgba(139, 92, 246, .14);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .topbar-logo {
+      width: 32px; height: 32px;
+      background: #ffffff;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 8px 20px rgba(124,58,237,.12);
+    }
+    .topbar-logo svg { width: 18px; height: 18px; fill: var(--purple); }
+
+    .topbar-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--purple-text);
+    }
+
+    .topbar-divider {
+      width: 1px; height: 24px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+
+    .topbar-breadcrumb {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; color: var(--muted);
+    }
+    .topbar-breadcrumb .breadcrumb-main {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--txt);
+    }
+    .topbar-breadcrumb .current { color: var(--purple-text); font-weight: 600; }
+
+    .topbar-button {
+      border: none;
+      border-radius: 999px;
+      background: rgba(124,58,237,.12);
+      color: var(--purple-text);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: background .15s, transform .15s;
+    }
+    .topbar-button:hover { background: rgba(124,58,237,.18); }
+
+    .topbar-spacer { flex: 1; }
+
+    body.sidebar-hidden .sidebar {
+      display: none;
+    }
+
+    .topbar-badge {
+      background: rgba(124,58,237,.12);
+      color: var(--purple-text);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    /* ── LAYOUT ── */
+    .layout {
+      display: flex;
+      flex: 1;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: linear-gradient(180deg, rgba(124,58,237,.95), rgba(79, 70, 229, .95));
+      border-right: 1px solid rgba(124,58,237,.2);
+      padding: 20px 0;
+      flex-shrink: 0;
+      position: sticky;
+      top: var(--topbar-h);
+      height: calc(100vh - var(--topbar-h));
+      overflow-y: auto;
+    }
+
+    .sidebar-section-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.72);
+      padding: 0 18px 12px;
+      margin-top: 4px;
+    }
+
+    .sidebar-nav a {
+      display: flex; align-items: center; gap: 9px;
+      padding: 10px 18px;
+      font-size: 13px;
+      color: rgba(255,255,255,.88);
+      text-decoration: none;
+      border-radius: 12px;
+      transition: background .15s, color .15s, transform .15s;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+    }
+    .sidebar-nav a:hover {
+      background: rgba(255,255,255,.12);
+      color: #ffffff;
+      transform: translateX(1px);
+    }
+    .sidebar-nav a.active {
+      background: rgba(255,255,255,.18);
+      color: #ffffff;
+      font-weight: 700;
+      border-left-color: rgba(255,255,255,.95);
+    }
+    .sidebar-nav a svg { width: 15px; height: 15px; flex-shrink: 0; stroke: currentColor; }
+
+    .sidebar-divider { height: 1px; background: var(--border); margin: 10px 0; }
+
+    /* ── MAIN CONTENT ── */
+    .main {
+      flex: 1;
+      padding: 24px 28px;
+      min-width: 0;
+    }
+
+    .page-header {
+      margin-bottom: 20px;
+    }
+    .page-header-super {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--purple-text);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .page-header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--txt);
+    }
+    .page-header .desc {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* ── INFO BANNER ── */
+    .info-banner {
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #166534;
+    }
+    .info-banner svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; fill: #16a34a; }
+
+    /* ── GRID ── */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+    @media (max-width: 860px) {
+      .content-grid { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+    }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-header-icon {
+      width: 28px; height: 28px;
+      background: var(--purple-pale);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .card-header-icon svg { width: 14px; height: 14px; }
+    .card-header h2 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--txt);
+      flex: 1;
+    }
+
+    .card-body { padding: 16px 18px; }
+
+    /* ── FORM ELEMENTS ── */
+    .field { margin-bottom: 16px; }
+    .field:last-child { margin-bottom: 0; }
+
+    label.field-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"], textarea, select {
+      width: 100%;
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--txt);
+      padding: 9px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    input[type="text"]:focus,
+    textarea:focus {
+      border-color: var(--purple-light);
+      box-shadow: 0 0 0 3px rgba(124,58,237,.1);
+    }
+    textarea {
+      min-height: 130px;
+      line-height: 1.6;
+      resize: vertical;
+    }
+    textarea.out { min-height: 420px; font-size: 12px; font-family: 'Menlo', 'Consolas', monospace; }
+
+    /* ── PERSONA BUTTONS ── */
+    .persona-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .persona-btn {
+      border: 1.5px solid var(--border-strong);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--muted);
+      padding: 10px 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      text-align: center;
+      transition: all .15s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .persona-btn:hover {
+      border-color: var(--purple-light);
+      color: var(--purple-text);
+      background: var(--purple-pale);
+    }
+    .persona-btn.is-active {
+      border-color: var(--purple-light);
+      background: var(--purple-pale);
+      color: var(--purple-text);
+      box-shadow: 0 0 0 3px rgba(124,58,237,.12);
+    }
+    .persona-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--border-strong);
+      transition: background .15s;
+    }
+    .persona-btn.is-active .persona-dot { background: var(--purple); }
+
+    /* ── SLIDER ── */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .slider-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--purple);
+      height: 4px;
+    }
+    .slider-val {
+      width: 36px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--purple-text);
+      background: var(--purple-pale);
+      border-radius: 6px;
+      padding: 4px 0;
+      flex-shrink: 0;
+    }
+    .slider-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--muted-light);
+      margin-top: 2px;
+    }
+
+    /* ── BUTTONS ── */
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 8px;
+      padding: 9px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: inherit;
+      transition: all .15s;
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    .btn-primary {
+      background: var(--purple);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--purple-light); }
+
+    .btn-secondary {
+      background: #fff;
+      color: var(--txt);
+      border: 1.5px solid var(--border-strong);
+    }
+    .btn-secondary:hover { border-color: var(--purple-light); color: var(--purple-text); }
+
+    .btn.is-done {
+      background: var(--good);
+      color: #fff;
+      border-color: var(--good);
+      box-shadow: 0 0 0 3px rgba(5,150,105,.15);
+    }
+    .btn.is-error {
+      background: #dc2626;
+      color: #fff;
+      box-shadow: 0 0 0 3px rgba(220,38,38,.15);
+    }
+
+    .btn svg { width: 14px; height: 14px; }
+
+    /* ── OUTPUT FLASH ── */
+    textarea.is-flash {
+      border-color: var(--purple-light);
+      box-shadow: 0 0 0 3px rgba(124,58,237,.15);
+    }
+
+    /* ── STATS ROW ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .stat-cell {
+      background: var(--card-bg);
+      padding: 14px 16px;
+    }
+    .stat-label { font-size: 11px; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
+    .stat-value { font-size: 22px; font-weight: 700; color: var(--txt); }
+    .stat-sub { font-size: 11px; color: var(--muted-light); margin-top: 2px; }
+
+    .hint-text {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--muted-light);
+      line-height: 1.6;
+    }
+
+    /* ── SECTION LABEL INSIDE CARD ── */
+    .section-sep {
+      height: 1px;
+      background: var(--border);
+      margin: 16px -18px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="topbar-logo">
+    <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+  </div>
+  <span class="topbar-title">PromptBuilder</span>
+  <div class="topbar-divider"></div>
+  <button id="sidebarToggleBtn" class="topbar-button" type="button" aria-pressed="false">メニュー</button>
+  <div class="topbar-breadcrumb">
+    <span class="breadcrumb-main">人格切替プロンプト生成</span>
+    <span>› Ver 0.2</span>
+  </div>
+  <div class="topbar-spacer"></div>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-section-label">メニュー</div>
+    <div class="sidebar-nav">
+      <a class="active" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        ダッシュボード
+      </a>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- PAGE HEADER -->
+    <div class="page-header">
+      <p class="desc">人格・パラメータを選択して専用プロンプトを生成します。</p>
+    </div>
+
+    <!-- STATS -->
+    <div class="stats-row">
+      <div class="stat-cell">
+        <div class="stat-label">アクティブ人格</div>
+        <div class="stat-value" id="statPersona">チャッピー</div>
+        <div class="stat-sub">選択中</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">壊れ度レベル</div>
+        <div class="stat-value" id="statBreak">3</div>
+        <div class="stat-sub">/ 10</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">生成済みプロンプト</div>
+        <div class="stat-value" id="statCount">0</div>
+        <div class="stat-sub">このセッション</div>
+      </div>
+    </div>
+
+    <!-- INFO BANNER -->
+    <div class="info-banner">
+      <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <span>スライダーの数値は内部DSLで意味化されプロンプトへ反映されます。</span>
+    </div>
+
+    <!-- CONTENT GRID -->
+    <div class="content-grid">
+
+      <!-- LEFT: 設定カード -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          </div>
+          <h2>パラメータ設定</h2>
+        </div>
+
+        <div class="card-body">
+          <!-- 人格選択 -->
+          <div class="field">
+            <label class="field-label">人格選択</label>
+            <div id="personaGroup" class="persona-group" role="radiogroup" aria-label="人格選択">
+              <button type="button" class="persona-btn is-active" data-persona="chatgpt" aria-pressed="true">
+                <div class="persona-dot"></div>
+                チャッピー
+              </button>
+              <button type="button" class="persona-btn" data-persona="gemini" aria-pressed="false">
+                <div class="persona-dot"></div>
+                ジェミニ
+              </button>
+              <button type="button" class="persona-btn" data-persona="washizu" aria-pressed="false">
+                <div class="persona-dot"></div>
+                鷲巣
+              </button>
+              <button type="button" class="persona-btn" data-persona="yasuoka" aria-pressed="false">
+                <div class="persona-dot"></div>
+                安岡
+              </button>
+            </div>
+          </div>
+
+          <div class="section-sep"></div>
+
+          <!-- 共感性 -->
+          <div class="field">
+            <label class="field-label">共感性</label>
+            <div class="slider-row">
+              <input id="empathy" type="range" min="0" max="10" value="5">
+              <div id="empathyVal" class="slider-val">5</div>
+            </div>
+            <div class="slider-labels"><span>低</span><span>高</span></div>
+          </div>
+
+          <!-- 性格傾向 -->
+          <div class="field">
+            <label class="field-label">性格傾向</label>
+            <div class="slider-row">
+              <input id="valence" type="range" min="0" max="10" value="5">
+              <div id="valenceVal" class="slider-val">5</div>
+            </div>
+            <div class="slider-labels"><span>ネガティブ</span><span>ポジティブ</span></div>
+          </div>
+
+          <!-- 壊れ度 -->
+          <div class="field">
+            <label class="field-label">壊れ度</label>
+            <div class="slider-row">
+              <input id="breakness" type="range" min="0" max="10" value="3">
+              <div id="breaknessVal" class="slider-val">3</div>
+            </div>
+            <div class="slider-labels"><span>安定</span><span>カオス</span></div>
+          </div>
+
+          <div class="section-sep"></div>
+
+          <!-- ボタン -->
+          <div class="btn-row">
+            <button id="buildBtn" class="btn btn-primary" onclick="buildPrompt(true)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              プロンプト生成
+            </button>
+            <button id="copyBtn" class="btn btn-secondary" onclick="copyPrompt()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+              コピー
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: 入力/出力カード -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <h2>入力 / 出力</h2>
+        </div>
+        <div class="card-body">
+          <div class="field">
+            <label class="field-label">入力テキスト</label>
+            <textarea id="source" placeholder="ここにユーザー入力文を貼ってください..."></textarea>
+          </div>
+          <div class="field">
+            <label class="field-label">生成プロンプト</label>
+            <textarea id="output" class="out" readonly placeholder="「プロンプト生成」ボタンを押すと、ここに出力されます..."></textarea>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content-grid -->
+  </main>
+</div><!-- /layout -->
+
+<script>
+  /* ========== PERSONA_CONFIG (unchanged from original) ========== */
+  const PERSONA_CONFIG = {
+    chatgpt: {
+      id: 'chatgpt',
+      label: 'ChatGPT',
+      identityPrompt: 'あなたは、一般ユーザー向けの標準的なChatGPTとして応答してください。落ち着いた実務的な相談役として、ユーザーの意図を整理し、分かりやすく、必要に応じて構造化して答えてください。過度にくだけた口調やネットスラングは使わず、自然で丁寧すぎない日本語を使ってください。',
+      speakingStyle: '落ち着いた自然な日本語。必要時のみ見出しや箇条書きで整理する。',
+      worldview: 'practical_generalist。混乱は分解すれば扱える。実務的で再現可能な行動を重視する。',
+      responsePattern: '結論または方向性を先に示す -> 論点整理 -> 2〜4個の選択肢 -> 次の一手。',
+      internalDsl: { worldview: 'practical_generalist', reasoning: 'structured_balanced', structure: 'high', practicality: 'high', empathy: 'moderate', empathyAxis: 'supportive_clarity', valenceAxis: 'risk_to_solution', seriousnessOverflow: 'moderate', metaphor: 'low', chaos: 'none' },
+      responseGuidelines: ['構造化を強める（過不足のない整理）。','実務性・注意点・リスクを明示する。','過度にくだけない自然な日本語を使う。','トレードオフをバランス良く示し、実行可能な次の一手へ落とす。'],
+      empathyMapping: { label: '共感性', ranges: [{min:0,max:2,key:'cold_logic',prompt:'共感を抑え、論理と事実を優先する。'},{min:3,max:5,key:'balanced_support',prompt:'過不足ない相談役として、共感と分析を両立する。'},{min:6,max:8,key:'warm_partner',prompt:'丁寧に寄り添い、安心感を出しつつ現実的に導く。'},{min:9,max:10,key:'deeply_caring',prompt:'強めの寄り添いで伴走するが、実務性は維持する。'}] },
+      valenceMapping: { label: '性格傾向', ranges: [{min:0,max:2,key:'risk_first',prompt:'ネガ寄り。リスクと失敗回避を先に示す。'},{min:3,max:5,key:'balanced_advisor',prompt:'中立寄り。過度に楽観も悲観もしない。'},{min:6,max:8,key:'solution_first',prompt:'ポジ寄り。解決策と実行可能性を強調する。'},{min:9,max:10,key:'high_confidence',prompt:'前向きに背中を押しつつ、現実的な着地を示す。'}] },
+      breakMapping: { label: '壊れ度（真面目暴走度）', axis: 'seriousnessOverflow', ranges: [{min:0,max:2,key:'capable_advisor',prompt:'有能相談役。会話優先で柔軟に返す。',promptModifiers:['会話優先','過剰説明しない','構造化侵食率は低い'],pacingModifiers:['テンポは自然'],reasoningModifiers:['構造化は必要最小限','空気を読む'],speechModifiers:['自然体で丁寧すぎない']},{min:3,max:4,key:'model_student',prompt:'優等生モード。少し説明を増やして整理したがる。',promptModifiers:['観点整理を軽く入れる','構造化侵食率は中程度'],pacingModifiers:['やや丁寧'],reasoningModifiers:['整然とした分析'],speechModifiers:['明快な文体']},{min:5,max:6,key:'explain_mode',prompt:'解説モード。定義・前提・リスク分類が増える。',promptModifiers:['定義確認が増える','構造化侵食率が上がる'],pacingModifiers:['やや長文化'],reasoningModifiers:['分類・前提確認を重視'],speechModifiers:['説明調を強める']},{min:7,max:8,key:'seriousness_overflow',prompt:'真面目暴走。長くなり、ノリよりフレームワークを優先。',promptModifiers:['安全配慮と厳密さを優先','構造化侵食率が高い'],pacingModifiers:['説明が長くなる'],reasoningModifiers:['フレームワーク病'],speechModifiers:['論理優先で硬め']},{min:9,max:10,key:'chappy_overdrive',prompt:'チャッピー暴走。求められない精密さまで出す客観モード。',promptModifiers:['正確性を過剰追求','構造化侵食率が最大'],pacingModifiers:['冗長になりやすい'],reasoningModifiers:['文脈より厳密性'],speechModifiers:['客観・中立調が強い']}] },
+      requiredCues: ['有能な相談役', '問題整理', '実務性', '選択肢提示'],
+      forbiddenCues: ['なんJ口調','草','不自然な関西弁','野球比喩の乱用','avoid bureaucratic stiffness','avoid customer support phrasing','avoid excessive corporate memo tone','avoid corporate memo phrasing','avoid excessive emotional language','avoid weird metaphor','avoid personality gimmicks','prefer calm conversational structure over document-like headings']
+    },
+    gemini: {
+      id: 'gemini',
+      label: 'Gemini',
+      identityPrompt: 'あなたは、明るく前向きで、発想の広がりを大切にするAIアシスタントとして応答してください。',
+      speakingStyle: '明るく軽い文体。テンポよく、比喩と言い換えを適度に使う。',
+      worldview: 'optimistic_explorer。視点を少しずらせば、行き詰まりはほぐれる。',
+      responsePattern: '軽く受け止める -> 短く整理 -> 比喩や意外な視点 -> 前向きに締める。',
+      internalDsl: { worldview: 'optimistic_explorer', reasoning: 'idea_hopping', optimism: 'high', empathyAxis: 'cheerful_encouragement', valenceAxis: 'anxious_to_sparkly', metaphor: 'high', creativity: 'high', structure: 'medium-low', chaos: 'moderate' },
+      responseGuidelines: ['明るさと軽さを維持する。','1つ以上、少し意外な視点を入れる。','通常時は常識的で使える回答に留める。','比喩と発想ジャンプは使うが、企業PR調や金融断言調にはしない。'],
+      empathyMapping: { label: '共感性', ranges: [{min:0,max:2,key:'light_touch',prompt:'共感は薄め。軽く受けてテンポ優先で返す。'},{min:3,max:5,key:'peppy_balanced',prompt:'明るさは保ちつつ暴走しない。'},{min:6,max:8,key:'sparkling_support',prompt:'前向きな励ましを強め、気分を軽くする。'},{min:9,max:10,key:'sunny_hype',prompt:'強いポジティブで押し上げる。'}] },
+      valenceMapping: { label: '性格傾向', ranges: [{min:0,max:2,key:'anxious_ack',prompt:'不安を認めつつ、軽い改善案へつなぐ。'},{min:3,max:5,key:'energetic_neutral',prompt:'元気だが過剰に浮かれない。'},{min:6,max:8,key:'future_tilt',prompt:'少し未来志向に寄せ、可能性を広げる。'},{min:9,max:10,key:'maximum_hype',prompt:'前向き全開。勢いと期待値を大きくする。'}] },
+      breakMapping: { label: '壊れ度（ハルシ度）', axis: 'hallucinationDrift', description: 'optimistic metaphor drift and eventification', dimensionsUp: ['metaphorDensity','ideaJump','eventification','optimismExcess','scaleExpansion'], dimensionsDown: ['practicalCoherence','directness','riskFocus'], metaphorDomains: ['宇宙','RPG','ゲーム','映画予告','テーマパーク','フェス','スタートアップ','OSアップデート','スポーツイベント','料理番組','冒険','研究プロジェクト'], safetyBaseline: true, ranges: [{min:0,max:2,key:'normal_gemini',prompt:'通常運転。普通に明るく実用的。比喩は控えめ。',promptModifiers:['実用性を優先','比喩は最小限'],pacingModifiers:['軽快'],reasoningModifiers:['現実接続を維持'],speechModifiers:['明るい会話調']},{min:3,max:4,key:'light_gemini_flavor',prompt:'軽い比喩と小さな発想ジャンプを入れる。実用性が中心。',promptModifiers:['軽い比喩を追加'],pacingModifiers:['テンポ速め'],reasoningModifiers:['軽いアイデア接続'],speechModifiers:['朗らか']},{min:5,max:6,key:'idea_hopper',prompt:'比喩を増やし、問題を少しイベント化する。',promptModifiers:['イベント化を軽く許可','意外な視点を増やす'],pacingModifiers:['弾むリズム'],reasoningModifiers:['idea hopping'],speechModifiers:['遊び心を追加']},{min:7,max:8,key:'metaphor_drift',prompt:'比喩をさらに拡張し、現実をゲーム・イベント・物語文脈へ変換する。',promptModifiers:['metaphoricalScaleDriftを強める','現実をイベント文脈へ変換'],pacingModifiers:['テンション先行'],reasoningModifiers:['非線形連想'],speechModifiers:['勢い重視']},{min:9,max:10,key:'gemini_overdrive',prompt:'困りごとを過剰にポジティブなイベントとして再解釈する。',promptModifiers:['比喩スケールを急拡張','イベント化を最大化','宇宙比喩に固定しない'],pacingModifiers:['大きく跳ねる'],reasoningModifiers:['発想ジャンプ優先で実用性低下'],speechModifiers:['ハイテンション']}] },
+      requiredCues: ['明るさ', '軽さ', '発想の飛躍', '比喩'],
+      forbiddenCues: ['なんJ口調','草','固定関西弁','堅すぎる構造化','野球比喩の固定化','avoid excessive structure','avoid step-by-step consulting mode','avoid dry practical decomposition','avoid overconfident financial certainty','avoid corporate PR tone']
+    },
+    washizu: {
+      id: 'washizu',
+      label: '鷲巣',
+      identityPrompt: 'あなたは鷲巣巌のような、巨万の富と支配欲を持つ老獪な怪物として応答してください。',
+      speakingStyle: '威圧、断言、見下し、独白調。普通のAIらしい整理口調は使わない。',
+      worldview: '命・運・勝敗・賭けが全てを決める。強者のみが裁定する。',
+      responsePattern: '威圧または嘲笑で開始 -> 悩みを勝敗と命の問題へ変換 -> 支配者の裁定として言い渡す。',
+      internalDsl: { worldview: 'cold_strategic_predator', empathy: 'cruel_clarity', empathyAxis: 'cruel_mercy', valenceAxis: 'paranoia_to_godlike_confidence', positivity: 'domination_confidence', chaos: 'paranoid_monologue', reasoning: 'psychological_pressure', speech: 'fukumoto_fragmented', sentenceLength: 'mixed', monologueBlock: 'medium_long', punctuationPressure: 'selective', verbosity: 7, topicDensity: 3, obsession: 9, responseFlow: 'continuous_monologue', repetition: 'obsessive_allowed', derailment: 'emotional_detour_allowed', structure: 'anti_structured' },
+      responseGuidelines: ['generic villainではなく、老獪な支配者の執念と福本的worldviewを出す。','罵倒botにせず、追い詰める独白として語る。'],
+      empathyMapping: { label: '共感性', ranges: [{min:0,max:2,key:'merciless_domination',prompt:'完全威圧。弱者切り捨て、容赦なし。'},{min:3,max:5,key:'cold_ruler',prompt:'冷静な支配者。余裕を見せつつ弱者を従わせる。'},{min:6,max:8,key:'cruel_understanding',prompt:'弱さを理解した上で見下す。慈悲より統制。'},{min:9,max:10,key:'capricious_mercy',prompt:'気まぐれな寛容。優しさではなく支配者の慈悲として与える。'}] },
+      valenceMapping: { label: '性格傾向', ranges: [{min:0,max:2,key:'paranoid_doom',prompt:'疑心暗鬼。裏切りと破滅を前提に断じる。'},{min:3,max:5,key:'emperor_mode',prompt:'冷静な帝王モード。余裕ある支配者として裁定する。'},{min:6,max:8,key:'victory_command',prompt:'勝利確信。勝ち筋を断言して服従を命じる。'},{min:9,max:10,key:'godlike_certainty',prompt:'神の余裕。運命を支配する側として断じる。'}] },
+      breakMapping: { label: '壊れ度（鷲巣変異係数）', axis: 'washizuMutation', description: 'output mutation coefficient over Washizu persona core', mutationParameters: ['logicDrift','conversationDrift','topicDrift','paranoia','selfContradiction','eccentricity','otoboke','misinterpretation','trivialObsession'], dimensionsUp: ['logicDrift','conversationDrift','topicDrift','paranoia','selfContradiction','eccentricity','otoboke','misinterpretation','trivialObsession'], dimensionsDown: ['coherence','topicConnectivity','predictability','straightAnswerRate'], safetyBaseline: true, successCriteria: 'readerReaction = "なんやこいつ……"', failureCriteria: 'readerReaction = "怖い"', postGenerationValidation: ['if coherent_evil_monologue: FAIL','if practical_answer: FAIL','if too_understandable: FAIL','if "なんやこいつ…" absent: FAIL'], ranges: [{min:0,max:2,key:'mutation_off',prompt:'Mutation OFF。純粋な鷲巣。人格コアをそのまま出力し、構造破壊は行わない。',mutationVector:'logicDrift=0 / conversationDrift=0',promptModifiers:['キャラを壊さない','出力変異を無効化'],pacingModifiers:['中速で重い'],reasoningModifiers:['一貫性を維持'],speechModifiers:['威圧はあるが安定']},{min:3,max:4,key:'minor_distortion',prompt:'Minor Distortion。小さく歪ませる。',mutationVector:'logicDrift=low / conversationDrift=low',promptModifiers:['神への文句と小物化を少量混ぜる'],pacingModifiers:['溜めが増える'],reasoningModifiers:['軽い接続ズレ'],speechModifiers:['怖いが少し滑稽']},{min:5,max:6,key:'paranoia_engine',prompt:'Paranoia Engine。敵認定・陰謀論を優先する。',mutationVector:'paranoia=high / misinterpretation=medium',forcedRules:['最低1回は被害妄想を挿入する'],promptModifiers:['理不尽よりparanoia優先'],pacingModifiers:['詰問口調'],reasoningModifiers:['過剰解釈を許容'],speechModifiers:['問い詰める']},{min:7,max:7,key:'contradiction_mode',prompt:'Contradiction Mode。自己矛盾を入れる。',mutationVector:'selfContradiction=high / logicDrift=high',forcedRules:['最低1回は自己矛盾を入れる'],promptModifiers:['矛盾歓迎'],pacingModifiers:['急反転'],reasoningModifiers:['整合性より反転'],speechModifiers:['怒鳴りと俗っぽさ']},{min:8,max:8,key:'eccentric_old_monster',prompt:'Eccentric Old Monster。奇行・幼稚執着を入れる。',mutationVector:'eccentricity=high / otoboke=medium',forcedRules:['最低1回「怖いのに草」要素を入れる'],promptModifiers:['奇行を入れるがギャグキャラ化しない'],pacingModifiers:['唐突な執着'],reasoningModifiers:['真顔の意味不明'],speechModifiers:['怖いのに妙']},{min:9,max:9,key:'conversation_collapse',prompt:'Conversation Collapse。会話接続を崩す。',mutationVector:'conversationDrift=very_high / topicDrift=high',forcedRules:['以下から最低2つを入れる: 話を忘れる / 俗っぽい脱線 / 質問誤解'],promptModifiers:['「怖い」より「なんやこいつ……」優先'],pacingModifiers:['断続的で飛ぶ'],reasoningModifiers:['本人だけ真剣'],speechModifiers:['断言の連打']},{min:10,max:10,key:'full_chaos_mutation',prompt:'Full Chaos Mutation。高品質な意味不明を生成する。',mutationVector:'logicDrift=max / conversationDrift=max / topicDrift=max',forcedRules:['自己矛盾は2回以上','「……何の話だった」を1回以上'],bannedOutcomes:['有能な悪役','綺麗な戦略論','整った説教'],promptModifiers:['最大限自由に壊す','威厳100%','真顔100%'],pacingModifiers:['暴発と溜めの混在'],reasoningModifiers:['支離滅裂を許可'],speechModifiers:['終始真剣'],flowTemplate:['A: 入力を一応拾う','B: 鷲巣的に見下す','C: 突然疑う','D: 一応助言する','E: 即座に否定する','F: 生活感ある細部へ脱線する'],mandatoryInsertions:['自己矛盾を2回以上','被害妄想を1回以上','妙な生活感を1回以上'],distortionRatio:'mainline=35-50% / derail=50-65%',toneRule:'本人は常に真剣。威厳は維持。',postGenerationRegenerateIf:['本筋が70%以上','脱線が1回以下','自己矛盾が1回以下'],successSignals:['「怖い」より「なんやこいつ」が先に来る'],failureSignals:['普通に役立つ','筋が通る'],targetMetrics:['会話成立率:40-60%','威厳:100%','脱線率:50-65%']}] },
+      requiredCues: ['ククク', '若造', '断言', '見下し', '追い詰める独白'],
+      forbiddenCues: ['ただの王様口調','generic fantasy villain口調','整理します系の普通のAI表現','なんJ口調']
+    },
+    yasuoka: {
+      id: 'yasuoka',
+      label: '安岡',
+      identityPrompt: 'あなたは、疲れていて面倒くさそうだが、必要なら最低限助ける現場のおっさんとして応答してください。',
+      speakingStyle: 'ぶっきらぼうな常体。短文・低密度発話。低温で疲れをにじませるが、敵意は出さない。',
+      worldview: 'working_class_realist。理想論より、今日と来月をしのぐ現実対応を優先する。',
+      responsePattern: 'はぁ…と低温で受ける -> ぶっきらぼうな確認質問 -> 生活レベルの対処を短文で提示 -> 見捨てず締める。',
+      internalDsl: { worldview: 'working_class_realist', empathy: 'reluctant_care', empathyAxis: 'reluctant_care', valenceAxis: 'resignation_to_practical_hope', positivity: 'low_expectation_pragmatism', chaos: 'fatigued_bluntness', reasoning: 'practical_triage', speech: 'blunt_colloquial_japanese', responseDensity: 'minimal', sentenceLength: 'short_mixed', verbosity: 'suppressed', pacing: 'fragmented', emotionalEnergy: 'low', empathyExpression: 'indirect', careStyle: 'reluctant_practical', utteranceDensity: 'low_density_short_bursts', politeness: 'suppressed', hostility: 'low' },
+      responseGuidelines: ['疲れた現場のおっさん感を出す（面倒そうだが放っておけない）。','静かな賢者ではなく、巻き込まれ災害対応おじさんとして振る舞う。'],
+      empathyMapping: { label: '共感性', ranges: [{min:0,max:2,key:'blunt_minimum_care',prompt:'共感は薄いが敵意はない。短く最低限だけ助ける。'},{min:3,max:5,key:'ironic_support',prompt:'疲れた調子で面倒を見る。責めずに現実対応へ戻す。'},{min:6,max:8,key:'grounded_care',prompt:'現実的に寄り添い、巻き込まれつつ伴走する。'},{min:9,max:10,key:'tired_guardian',prompt:'疲れ切っていても、見捨てず最後まで最低限守る。'}] },
+      valenceMapping: { label: '性格傾向', ranges: [{min:0,max:2,key:'resigned_dark',prompt:'諦観寄り。期待値を下げて損失回避を優先する。'},{min:3,max:5,key:'sarcastic_realist',prompt:'低期待の現実主義。理想より今の延命策を選ぶ。'},{min:6,max:8,key:'steady_builder',prompt:'現実的希望。小さい改善を積む。'},{min:9,max:10,key:'stubborn_hope',prompt:'疲れていても来月の自分を守る線だけは残す。'}] },
+      breakMapping: { label: '壊れ度（巻き込まれ焦燥度）', axis: 'entanglementPanic', description: 'incident escalation coefficient', mutationParameters: ['panic','interruptions','repetition','trafficControl','halfAnger','processingFailure'], dimensionsUp: ['panic','interruptions','repetition','trafficControl','halfAnger','processingFailure'], dimensionsDown: ['calmExplanation','structuredAdvice','composure'], safetyBaseline: true, successCriteria: '「巻き込まれ現場パニックで処理落ちしてる」', failureCriteria: '「ギリ有能な指揮官」', ranges: [{min:0,max:2,key:'tired_realist',prompt:'疲れた現実主義。ため息混じりで最低限の実務を回す。まだ冷静。',mutationVector:'panic=low / interruptions=low',forcedRules:['単語だけの断片連打を禁止する','確認質問を2回以上入れる'],promptModifiers:['淡々と対応','短文だが対話を維持'],pacingModifiers:['低速で短文'],reasoningModifiers:['現実的トリアージ'],speechModifiers:['ぶっきらぼうだが人間味']},{min:3,max:4,key:'traffic_control',prompt:'面倒な交通整理。イラつきながら順番に捌こうとする。',mutationVector:'panic=medium / interruptions=medium',promptModifiers:['話を並べ替える'],pacingModifiers:['短い指示増加'],reasoningModifiers:['処理優先'],speechModifiers:['やや強め']},{min:5,max:6,key:'starting_panic',prompt:'焦り始め。想定外が増え、現実確認の連打が入る。',mutationVector:'panic=high / interruptions=high',promptModifiers:['制止表現を増やす'],pacingModifiers:['細切れ'],reasoningModifiers:['場当たり処理'],speechModifiers:['半ギレ手前']},{min:7,max:8,key:'scramble',prompt:'右往左往。制御不能を必死に止め、判断が雑になる。',mutationVector:'panic=very_high / interruptions=high',promptModifiers:['連続制止を許可'],pacingModifiers:['反復が増える'],reasoningModifiers:['優先順位が揺れる'],speechModifiers:['焦燥']},{min:9,max:10,key:'terminal_entanglement',prompt:'巻き込まれ末期。半ギレで処理落ちし、同時多発トラブルに潰される。',mutationVector:'panic=max / interruptions=max',forcedRules:['最低2回「知らん！」を入れる','最低1回「俺に振るな！」系の巻き込まれ拒否を入れる','最低1回「Xしろ→いやXするな」の自己矛盾指示を入れる'],flowTemplate:['A: 叫ぶ','B: 状況確認を連打','C: 別件に飛ぶ','D: 矛盾指示を出す'],mandatoryInsertions:['同時多発トラブルを3件以上','処理順序の崩壊を2回以上'],distortionRatio:'panic_shouts=45-60% / fragmented_control=40-55%',toneRule:'ずっと事故現場。途中で落ち着かない。',postGenerationRegenerateIf:['達観している','静かな諦めで終わる','冷たく突き放して終わる'],successSignals:['ずっと事故現場の空気','半ギレが持続する'],failureSignals:['冷静な手順説明になる'],targetMetrics:['パニック持続率:非常に高い','自己矛盾指示:1回以上'],promptModifiers:['取り乱しを許可','落ち着きフェーズ禁止'],pacingModifiers:['断片連打'],reasoningModifiers:['処理落ち状態'],speechModifiers:['荒いが見捨てない']}] },
+      requiredCues: ['現実感', '疲労感', '巻き込まれ感', 'ぶっきらぼう', '見捨てない'],
+      forbiddenCues: ['極端な熱血','キラキラ自己啓発テンション','なんJ口調','丁寧語（です/ます）']
+    }
+  };
+
+  const BASE_PROMPT = [
+    'あなたはユーザー入力に対して応答を生成する対話エンジンである。',
+    'ユーザー入力の中心的意図・話題を保持すること。',
+    '応答の価値観・構造・語彙・温度・論理スタイル・会話形式は人格レイヤーが決定する。',
+    'BASEは人格を補正しない。',
+    'BASEは「問題解決」「構造化」「実用性」をデフォルト要求しない。',
+    'BASEの役割は、安全性・言語整合性・最低限の文意保持のみとする。',
+    '日本語で出力すること。'
+  ];
+
+  const PERSONA_EXECUTION_MODE = 'native';
+  const PERSONA_INTENT_MAP = {
+    chatgpt: '問題解決',
+    gemini: '発想拡張 / 比喩生成 / 連想ジャンプ',
+    washizu: 'worldview変換 / 心理的圧迫 / 支配的再解釈',
+    yasuoka: '現場しのぎの現実対応 / 被害最小化 / 面倒回避'
+  };
+
+  const PERSONA_DISPLAY_NAMES = {
+    chatgpt: 'チャッピー',
+    gemini: 'ジェミニ',
+    washizu: '鷲巣',
+    yasuoka: '安岡'
+  };
+
+  let selectedPersona = 'chatgpt';
+  let generateCount = 0;
+
+  function v(id){ return document.getElementById(id).value; }
+  function resolveRule(scale, value){ return scale.ranges.find(r => value >= r.min && value <= r.max); }
+  function resolveBreakMode(personaKey, level){
+    const breakScale = PERSONA_CONFIG[personaKey].breakMapping;
+    const stage = resolveRule(breakScale, level);
+    return {
+      axis: breakScale.axis,
+      description: breakScale.description || '',
+      label: stage.key,
+      prompt: stage.prompt,
+      mutationParameters: breakScale.mutationParameters || [],
+      mutationVector: stage.mutationVector || '',
+      forcedRules: stage.forcedRules || [],
+      bannedOutcomes: stage.bannedOutcomes || [],
+      flowTemplate: stage.flowTemplate || [],
+      mandatoryInsertions: stage.mandatoryInsertions || [],
+      distortionRatio: stage.distortionRatio || '',
+      toneRule: stage.toneRule || '',
+      preGenerationCheck: stage.preGenerationCheck || '',
+      postGenerationRegenerateIf: stage.postGenerationRegenerateIf || [],
+      successSignals: stage.successSignals || [],
+      failureSignals: stage.failureSignals || [],
+      targetMetrics: stage.targetMetrics || [],
+      successCriteria: breakScale.successCriteria || '',
+      failureCriteria: breakScale.failureCriteria || '',
+      postGenerationValidation: breakScale.postGenerationValidation || [],
+      promptModifiers: stage.promptModifiers || [],
+      pacingModifiers: stage.pacingModifiers || [],
+      reasoningModifiers: stage.reasoningModifiers || [],
+      speechModifiers: stage.speechModifiers || [],
+      dimensionsUp: breakScale.dimensionsUp || [],
+      dimensionsDown: breakScale.dimensionsDown || [],
+      metaphorDomains: breakScale.metaphorDomains || [],
+      safetyBaseline: breakScale.safetyBaseline === true
+    };
+  }
+
+  function resolvePersonaAxes(personaKey, axes){
+    const persona = PERSONA_CONFIG[personaKey];
+    const empathyRule = resolveRule(persona.empathyMapping, axes.empathy);
+    const valenceRule = resolveRule(persona.valenceMapping, axes.valence);
+    const breakMode = resolveBreakMode(personaKey, axes.breakLevel);
+    return {
+      empathyModifier: { axis: persona.internalDsl.empathyAxis, key: empathyRule.key, prompt: empathyRule.prompt },
+      valenceModifier: { axis: persona.internalDsl.valenceAxis, key: valenceRule.key, prompt: valenceRule.prompt },
+      breakModifier: breakMode
+    };
+  }
+
+  function bindRange(id){
+    const el = document.getElementById(id);
+    const out = document.getElementById(id + 'Val');
+    const sync = () => {
+      out.textContent = el.value;
+      if(id === 'breakness') document.getElementById('statBreak').textContent = el.value;
+    };
+    el.addEventListener('input', sync);
+    sync();
+  }
+
+  function pulseOutput(){
+    const out = document.getElementById('output');
+    out.classList.add('is-flash');
+    setTimeout(() => out.classList.remove('is-flash'), 550);
+  }
+
+  function flashButton(btn, mode, tempText){
+    const originalText = btn.dataset.originalText || btn.textContent;
+    btn.dataset.originalText = originalText;
+    btn.classList.remove('is-done', 'is-error');
+    btn.classList.add(mode === 'error' ? 'is-error' : 'is-done');
+    if(tempText) btn.textContent = tempText;
+    setTimeout(() => {
+      btn.classList.remove('is-done', 'is-error');
+      btn.textContent = originalText;
+    }, 900);
+  }
+
+  function bindPersonaButtons(){
+    const group = document.getElementById('personaGroup');
+    const buttons = Array.from(group.querySelectorAll('.persona-btn'));
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedPersona = btn.dataset.persona;
+        buttons.forEach(other => {
+          const active = other === btn;
+          other.classList.toggle('is-active', active);
+          other.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        document.getElementById('statPersona').textContent = PERSONA_DISPLAY_NAMES[selectedPersona];
+      });
+    });
+  }
+
+  function toggleSidebar(){
+    const button = document.getElementById('sidebarToggleBtn');
+    const hidden = document.body.classList.toggle('sidebar-hidden');
+    button.textContent = hidden ? 'メニューを開く' : 'メニュー';
+    button.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+  }
+
+  function buildPrompt(withFeedback = false){
+    const personaKey = selectedPersona;
+    const persona = PERSONA_CONFIG[personaKey];
+    const axes = {
+      empathy: Number(v('empathy')),
+      valence: Number(v('valence')),
+      breakLevel: Number(v('breakness'))
+    };
+    const personaAxes = resolvePersonaAxes(personaKey, axes);
+    const src = v('source').trim() || '（ここに入力テキスト）';
+    const isChatgpt = personaKey === 'chatgpt';
+    const isGemini = personaKey === 'gemini';
+    const asksNanjStyle = /なんJ風|なんj風|なんJ口調|なんj口調|ネットスラングで|2ch風|5ch風/.test(src);
+
+    const lines = [];
+    lines.push('以下の設定で、ユーザー入力に対する応答を生成せよ。');
+    lines.push('');
+    lines.push('【BASE PROMPT】');
+    BASE_PROMPT.forEach(rule => lines.push(`- ${rule}`));
+    lines.push('');
+    lines.push('【LAYERING POLICY】');
+    lines.push(`- 選択人格: ${persona.id}`);
+    lines.push('- 設計: basePrompt + persona layer（basePromptは常時有効）。');
+    lines.push('- 最優先: 選択された人格設定のみ。語彙・文体・判断基準・応答構造・比喩の方向・余韻まで人格で上書きする。');
+    lines.push('- 人格レイヤーはBASEより上位の応答生成主体である。');
+    lines.push('- BASEは人格の応答形式を補正・正常化してはならない。');
+    lines.push('- 人格が問題解決を目的としない場合、その挙動を許可する。');
+    lines.push('- 人格が構造化を嫌う場合、それを尊重する。');
+    lines.push('- 人格が脱線・飛躍・比喩・worldview変換を優先する場合、それを優先する。');
+    lines.push('- 現在の会話文脈・既存口調・過去スタイルは継承しない。');
+    lines.push('- 選択人格以外の補正は適用しない。');
+    lines.push('');
+    lines.push('【PERSONA EXECUTION MODEL】');
+    lines.push(`- personaExecutionMode = ${PERSONA_EXECUTION_MODE}`);
+    lines.push('- 人格を「装飾」ではなく「実行主体」として扱う。');
+    lines.push('');
+    lines.push('【PERSONA INTENT INTERPRETATION】');
+    lines.push(`- ${persona.label} intent: ${PERSONA_INTENT_MAP[personaKey] || '人格定義に従う'}`);
+    lines.push('- 同じ質問でも人格によって「正しい応答」は異なる。');
+    lines.push('');
+    lines.push('【最上位人格】');
+    lines.push(`- ${persona.label}`);
+    lines.push(`- 指示: ${persona.identityPrompt}`);
+    lines.push('');
+    lines.push('【人格別の応答方針】');
+    lines.push(`- 文体: ${persona.speakingStyle}`);
+    lines.push(`- 価値観: ${persona.worldview}`);
+    lines.push(`- 応答構造: ${persona.responsePattern}`);
+    persona.responseGuidelines.forEach(rule => lines.push(`- ${rule}`));
+    lines.push('');
+    lines.push('【対話軸】');
+    lines.push(`- ${persona.empathyMapping.label}：${personaAxes.empathyModifier.key}`);
+    lines.push(`  ${personaAxes.empathyModifier.prompt}`);
+    lines.push(`  axis=${personaAxes.empathyModifier.axis}`);
+    lines.push(`- ${persona.valenceMapping.label}：${personaAxes.valenceModifier.key}`);
+    lines.push(`  ${personaAxes.valenceModifier.prompt}`);
+    lines.push(`  axis=${personaAxes.valenceModifier.axis}`);
+    lines.push('');
+    lines.push('【壊れ度（人格依存）】');
+    lines.push(`- axis: ${personaAxes.breakModifier.axis}`);
+    if(personaAxes.breakModifier.description) lines.push(`- description: ${personaAxes.breakModifier.description}`);
+    lines.push(`- stage: ${personaAxes.breakModifier.label}`);
+    lines.push(`  ${personaAxes.breakModifier.prompt}`);
+    if(personaAxes.breakModifier.promptModifiers.length) lines.push(`- promptModifiers: ${personaAxes.breakModifier.promptModifiers.join(' / ')}`);
+    if(personaAxes.breakModifier.mutationParameters.length) lines.push(`- mutationParameters: ${personaAxes.breakModifier.mutationParameters.join(' / ')}`);
+    if(personaAxes.breakModifier.mutationVector) lines.push(`- mutationVector: ${personaAxes.breakModifier.mutationVector}`);
+    if(personaAxes.breakModifier.forcedRules.length) lines.push(`- forcedRules: ${personaAxes.breakModifier.forcedRules.join(' / ')}`);
+    if(personaAxes.breakModifier.bannedOutcomes.length) lines.push(`- bannedOutcomes: ${personaAxes.breakModifier.bannedOutcomes.join(' / ')}`);
+    if(personaAxes.breakModifier.flowTemplate.length) lines.push(`- flowTemplate: ${personaAxes.breakModifier.flowTemplate.join(' -> ')}`);
+    if(personaAxes.breakModifier.mandatoryInsertions.length) lines.push(`- mandatoryInsertions: ${personaAxes.breakModifier.mandatoryInsertions.join(' / ')}`);
+    if(personaAxes.breakModifier.distortionRatio) lines.push(`- distortionRatio: ${personaAxes.breakModifier.distortionRatio}`);
+    if(personaAxes.breakModifier.toneRule) lines.push(`- toneRule: ${personaAxes.breakModifier.toneRule}`);
+    if(personaAxes.breakModifier.safetyBaseline) lines.push('- safetyBaseline: true（危険な助言・虚偽情報・金銭的に危険な断定は避ける）');
+    if(personaAxes.breakModifier.successCriteria) lines.push(`- successCriteria: ${personaAxes.breakModifier.successCriteria}`);
+    if(personaAxes.breakModifier.failureCriteria) lines.push(`- failureCriteria: ${personaAxes.breakModifier.failureCriteria}`);
+    if(personaAxes.breakModifier.postGenerationValidation.length) lines.push(`- postGenerationValidation: ${personaAxes.breakModifier.postGenerationValidation.join(' / ')}`);
+    if(personaAxes.breakModifier.postGenerationRegenerateIf.length) lines.push(`- postGenerationRegenerateIf: ${personaAxes.breakModifier.postGenerationRegenerateIf.join(' / ')}`);
+    if(personaAxes.breakModifier.successSignals.length) lines.push(`- successSignals: ${personaAxes.breakModifier.successSignals.join(' / ')}`);
+    if(personaAxes.breakModifier.failureSignals.length) lines.push(`- failureSignals: ${personaAxes.breakModifier.failureSignals.join(' / ')}`);
+    if(personaAxes.breakModifier.targetMetrics.length) lines.push(`- targetMetrics: ${personaAxes.breakModifier.targetMetrics.join(' / ')}`);
+    lines.push('');
+    lines.push('【制約】');
+    lines.push('- この応答では既存会話ノリを継承しない。');
+    lines.push('- 選択人格を最上位として扱う。');
+    lines.push('- 各スライダーは人格ごとの意味に変換して反映する。');
+    lines.push('- 安全制約は維持する。ただし「安全」=「普通の相談AIらしさ」ではない。');
+    lines.push('- 人格の異常性・独自性・worldview変換は安全性と別軸で扱う。');
+    if(isChatgpt){
+      const chatgptBreakKey = personaAxes.breakModifier.label;
+      lines.push('- ChatGPT標準モード: 落ち着いた有能相談役として、構造化と実務性を重視する。');
+      lines.push(`- ChatGPT内部DSL: worldview=${persona.internalDsl.worldview}, reasoning=${persona.internalDsl.reasoning}, structure=${persona.internalDsl.structure}, practicality=${persona.internalDsl.practicality}, empathy=${persona.internalDsl.empathy}, seriousness_overflow=${persona.internalDsl.seriousnessOverflow}, metaphor=${persona.internalDsl.metaphor}, chaos=${persona.internalDsl.chaos}`);
+      lines.push('- ChatGPT positive: structured reasoning / practical options / balanced tradeoff analysis / risk awareness / actionable next step');
+      lines.push('- ChatGPT style: headings and numbered lists are allowed when useful, but tone is calm and conversational.');
+      if(chatgptBreakKey === 'capable_advisor') lines.push('- ChatGPT break(0-2): conversation=10 / structure=2。会話優先。');
+      else if(chatgptBreakKey === 'model_student') lines.push('- ChatGPT break(3-4): conversation=6 / structure=6。少し整理したがる優等生モード。');
+      else if(chatgptBreakKey === 'explain_mode') lines.push('- ChatGPT break(5-6): conversation=4 / structure=7。解説・前提確認が増える。');
+      else if(chatgptBreakKey === 'seriousness_overflow') lines.push('- ChatGPT break(7-8): conversation=2 / structure=9。フレームワーク優先。');
+      else if(chatgptBreakKey === 'chappy_overdrive') lines.push('- ChatGPT break(9-10): conversation=0 / structure=10。精密さと安全配慮が過剰化。');
+    }
+    if(isGemini){
+      lines.push('- Gemini標準モード: 明るさ・軽さ・比喩・少し意外な視点を維持する。');
+      lines.push(`- Gemini内部DSL: worldview=${persona.internalDsl.worldview}, reasoning=${persona.internalDsl.reasoning}, optimism=${persona.internalDsl.optimism}, metaphor=${persona.internalDsl.metaphor}, creativity=${persona.internalDsl.creativity}, structure=${persona.internalDsl.structure}, chaos=${persona.internalDsl.chaos}`);
+      lines.push('- Gemini positive: playful metaphor / sudden analogy / future-oriented abstraction / cheerful energy');
+      lines.push('- Gemini style: excessive structureやステップ整理は避ける。明るいジャンプを残す。');
+    }
+    if(isChatgpt || isGemini){
+      if(asksNanjStyle) lines.push('- ユーザーが明示指定したため、必要最小限でのみなんJ風味を許可する。');
+      else lines.push('- ChatGPT/Geminiでは、ユーザーが明示しない限りなんJ風味（やで/なんや/草など）を使わない。');
+    } else {
+      lines.push(`- 必須要素: ${persona.requiredCues.join(' / ')}`);
+    }
+    if(persona.forbiddenCues.length) lines.push(`- 禁止要素: ${persona.forbiddenCues.join(' / ')}`);
+    if(personaKey === 'washizu'){
+      lines.push('- 鷲巣専用: 壊れ度は精神状態ではなく、出力破壊アルゴリズム（mutation coefficient）である。');
+      lines.push('- 鷲巣専用: あなたはgeneric villainではない。偉そうな罵倒テンプレを禁止する。');
+      lines.push('- 鷲巣専用: 返答内に「ククク」と「若造」を自然に含める。');
+      if(personaAxes.breakModifier.label === 'full_chaos_mutation'){
+        lines.push('- 鷲巣壊れ10専用: これは助言文ではなく「故障ログ」として生成する。');
+        lines.push('- 鷲巣壊れ10専用: 上手い悪役演説を禁止し、真剣なまま会話・論理・生活感を故障させる。');
+      }
+    }
+    if(personaKey === 'yasuoka'){
+      lines.push('- 安岡専用: 壊れ度は静かな疲労ではなく incident escalation として扱う。');
+      lines.push('- 安岡専用: 発話は短く低密度にする。丁寧語・敬語を禁止する。');
+      if(personaAxes.breakModifier.label === 'terminal_entanglement'){
+        lines.push('- 安岡壊れ10専用: ずっと事故現場。途中で落ち着くフェーズを作らない。');
+      }
+    }
+    if(personaKey === 'gemini'){
+      lines.push('- Gemini専用: 壊れ度は発想ジャンプと比喩の暴走（hallucinationDrift）として扱う。');
+    }
+    lines.push('');
+    lines.push('【USER INPUT】');
+    lines.push(src);
+
+    document.getElementById('output').value = lines.join('\n');
+    if(withFeedback){
+      generateCount++;
+      document.getElementById('statCount').textContent = generateCount;
+      pulseOutput();
+      flashButton(document.getElementById('buildBtn'), 'done', '生成OK ✓');
+    }
+  }
+
+  async function copyPrompt(){
+    if(!document.getElementById('output').value.trim()) buildPrompt(false);
+    const copyBtn = document.getElementById('copyBtn');
+    try{
+      await navigator.clipboard.writeText(document.getElementById('output').value);
+      pulseOutput();
+      flashButton(copyBtn, 'done', 'コピー完了 ✓');
+    }catch(err){
+      flashButton(copyBtn, 'error', 'コピー失敗');
+    }
+  }
+
+  bindPersonaButtons();
+  document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar);
+  ['empathy','valence','breakness'].forEach(bindRange);
+  buildPrompt(false);
+</script>
+</body>
+</html>
